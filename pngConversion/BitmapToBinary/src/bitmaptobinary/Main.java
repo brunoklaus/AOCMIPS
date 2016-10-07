@@ -13,7 +13,7 @@ import java.util.Arrays;
  */
 public class Main {
     
-    static String filename = "lbutton_credits";
+    static String filename = "credits_grad";
     
     public static void main (String[] args) {
         PNGToBinary conv = new PNGToBinary();
