@@ -1,0 +1,15 @@
+Programa em Assembly que desenha imagens .PNG.
+As imagens .png foram convertidas em Java para um formato bem simples, chamado .KLAUS.
+Os arquivos .KLAUS consistem simplesmente de uma word descrevendo a altura, uma para a largura, e as seguintes especificando o valor de cada pixel.
+Desse modo eh desenhada a title screen do jogo PONG.
+
+Para fazer download de todo o projeto do PONG:
+https://github.com/brunoklaus/AOCMIPS
+
+(Todo o codigo do projeto esta em ingles)
+
+----------------------------------
+INSTRUCOES : 
+-Executar Mars.
+-Abrir o arquivo AOCPong.asm no Mars
+-Seguir instrucoes comentadas no comeco do codigo. 
