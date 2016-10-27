@@ -68,20 +68,21 @@
 	# Game Variables
 	paddleW : .word 4
 	paddleH : .word 30
-	ballSize: .word 8
+	ballSize: .word 2
 	numPlayers :.word 4
+	OOBFlags : .word 4 #1 if ball out of bounds for (left, right, up, down), 0 otherwise
 	
 	#*_0 is for the ball, 1-4 for the players
 	#X positions. Position X 1-4 stays constant
-	initPosX_0: .float 64.0
+	initPosX_0: .float 0.0
 	initPosX_1: .float 0.0
-	initPosX_2: .float 28.0
-	initPosX_3: .float 96.0
-	initPosX_4: .float 124.0
+	initPosX_2: .float 124.0
+	initPosX_3: .float 28.0
+	initPosX_4: .float 96.0
 	
-	initPosY: .float 64.0
+	initPosY: .float 10.0
 	initBallVelX : .float 100.0
-	initBallVelY : .float -40.0
+	initBallVelY : .float 30.0
 	
 	
 	#Now we declare the actual buffer of current game values
@@ -93,13 +94,18 @@
 	oldPosX: .float 0.0
 	paddleVelY: .float 100.0 #velocity at which paddle moves
 	#The state of all axes
-	inputList: .word -1:4
+	inputList: .word 1:4
 	
 	#64-bit current time
 	cTime_0 : .word 0	
 	cTime_1: .word 0			
 	frameEnded: .asciiz "Frame Ended\n"
+	colDetected: .asciiz"Collision detected \n"
 	frameDuration : .float 0.03333333
+	
+	roof: .word 20
+	floor: .word 120
+	
 	
 	
 	
@@ -138,7 +144,7 @@ jal DrawPNGOnDisplay
 addi $s0, $zero, 0
 sw $s0, TitleFMS 
 
-j InitGame
+#j InitGame
 j TitleLoop
 
 
@@ -268,6 +274,7 @@ j Init
 #Draws the desired title button on the screen
 #	@param a0 the button number
 DrawTitleButton:
+
 	addi $sp, $sp, -4
 	sw $ra, 0($sp) #store $ra
 	
@@ -349,8 +356,8 @@ DrawPNGOnDisplay:
 #	@param a0 the x position
 #	@param a1 the y position
 
-
-	addi $sp, $sp, -24	
+	
+	addi $sp, $sp, -24
 	sw $ra, 0($sp) #stuff
 	sw $s0, 4($sp)
 	sw $s1, 8($sp)
@@ -381,6 +388,9 @@ DrawPNGOnDisplay:
 	
 	add $t6, $t6, $s0 #t6 now holds x+width
 	add $t7, $t7, $s1 #t7 now holds y+height
+	
+	
+	
 	
 	
 	WhileDrawPNGOnDisplayY:
@@ -786,6 +796,7 @@ sub64:
   s.s $f1, 8($t0)
   s.s $f1, 12($t0) 
   s.s $f1, 16($t0)
+  
   jal ClearBg
 
  MainLoop:
@@ -800,16 +811,20 @@ sub64:
  	jal CheckAxisValues
  	jal UpdatePos
  	
- 	##Check for ball out of bounds
- 	lw $t0, posX
- 	bltz $t0, OutOfBoundsLeft
- 	bgt $t0, 128, OutOfBoundsRight
+ 	##Check for ball out of bounds horizontally
+ 	la $t0, OOBFlags
+ 	lw $t1, 0($t0)
+ 	bne $t1, $zero, OutOfBoundsRight
+ 	lw $t1, 4($t0)
+ 	bne $t1, $zero, OutOfBoundsLeft
  	j OutOfBoundsEnd
  	OutOfBoundsRight:
  	addi $a0, $zero, 0
  	OutOfBoundsLeft:
  	addi $a0, $zero, 1
  	OutOfBoundsEnd:
+ 	
+ 	jal DealWithCol
  	
  	jal DrawFrame
  	
@@ -836,13 +851,25 @@ CheckAxisValues:
 UpdatePos:
 #UpdatePos updates the positions of paddles
 # and ball for this frame
-#TODO: Implement this. 
+
+#Set Out of Bounds flags to 0
+la $t0, OOBFlags
+li $t1, 0
+sw $t1, 0($t0)
+sw $t1, 4($t0)
+sw $t1, 8($t0)
+sw $t1, 12($t0)
+
+
 lwc1 $f0, frameDuration #delta_t
 li $t1, 0 #Counter variable i. 0 <= i < 4
 la $t2, posY #holds address to current y pos
 la $t7, oldPosY #holds address to current y pos
 addi $t2, $t2, 4	
 addi $t7, $t7, 4	
+
+
+
 
 la $t3, inputList #holds current input axis to check
 UpdatePosPaddleLoop:
@@ -851,7 +878,7 @@ UpdatePosPaddleLoop:
 	lwc1 $f2, 0($t2)
 	swc1 $f2, 0($t7)
 	
-	
+	#t4 gets current input value
 	lw $t4, 0($t3)## posY = posY + vY * delta_t
 	
 	sub.s $f2, $f2, $f2 #f2 initially gets increment
@@ -862,12 +889,12 @@ UpdatePosPaddleLoop:
 	inputGtZ:
 	lwc1 $f1, paddleVelY
 	mul.s $f1, $f1, $f0 #f1 = paddleVely * delta_t
-	mov.s $f2, $f1
+	mov.s $f2, $f1 #f2 = paddleVely * delta_t
 	j inputCmpEnd
 	inputLtZ:
 	lwc1 $f1, paddleVelY
-	mul.s $f1, $f1, $f0 
-	sub.s $f2, $f2, $f1
+	mul.s $f1, $f1, $f0 #f1 = paddleVely * delta_t
+	sub.s $f2, $f2, $f1 #f2 =  - paddleVely * delta_t
 	j inputCmpEnd
 	inputCmpEnd:
 
@@ -876,26 +903,27 @@ UpdatePosPaddleLoop:
 	#Now f2 has the new value. Check if in bounds
 	cvt.w.s  $f5, $f2            # $f5 <- (int)$f2
 				    # $f3 now contains an integer!
-	mfc1    $t5 ,$f5            # $t5 <- $f5 (no format change!)
+	mfc1    $t5 ,$f5            # $t5 <- (int)((delta_t * paddleVelY) + posY)
 	
 	## OOB cases :#
-	blt $t5, 0,OOBUp
-	lw $t6, paddleH #t6 will be 128 - paddleH
-	sub $t6, $zero, $t6
-	addi $t6, $t6, 128
+	lw $t0, roof
+	blt $t5, $t0,OOBUp #Out of bounds if less than roog
+	lw $t0, floor #t0 will be floor - paddleH
+	lw $t6, paddleH #Out of bounds if more than floor
+	sub $t0, $t0, $t6
 	
-	bgt $t5, $t6, OOBDown
+	bgt $t5, $t0, OOBDown
 	j OOBEnd
 	
 	OOBUp:
-	li $t5, 0
+	move $t5, $t0
 	mtc1    $t5, $f4 
 	cvt.s.w $f2, $f4
 	
 	j OOBEnd
 	
 	OOBDown:
-	move $t5, $t6 #f2 is greater than allowed
+	move $t5, $t0 #f2 is greater than allowed
 	mtc1    $t5, $f4 
 	cvt.s.w $f2, $f4
 	j OOBEnd
@@ -948,6 +976,62 @@ mul.s $f2, $f0,$f2
 add.s $f1, $f1, $f2
 swc1 $f1, 0($t0)
 
+#Now we deal with the case when the ball is
+#out of bounds:
+la $t0, OOBFlags
+li $t1, 1
+
+lwc1  $f1, posX
+lwc1 $f2, posY
+
+lw $t2, ballSize
+
+li $t3, 128
+sub $t3, $t3, $t2
+mtc1 $t3, $f3
+cvt.s.w $f3, $f3
+c.lt.s $f1, $f3
+bc1f ballUpdateOOBRight
+
+ballUpdateOOBLeftCheck:
+sub.s $f3, $f3, $f3
+c.lt.s $f3, $f1
+bc1f ballUpdateOOBLeft
+
+ballUpdateOOBUpCheck:
+lw $t3, roof
+mtc1 $t3, $f3
+cvt.s.w $f3, $f3
+c.lt.s $f3, $f2
+bc1f ballUpdateOOBUp
+
+ballUpdateOOBDownCheck:
+lw $t3, floor
+sub $t3, $t3, $t2
+mtc1 $t3, $f3
+cvt.s.w $f3, $f3
+c.lt.s $f3, $f2
+bc1t ballUpdateOOBDown
+j ballUpdateOOBEnd
+
+ballUpdateOOBRight:
+swc1 $f3, posX 
+sw $t1, 0($t0)
+j ballUpdateOOBLeftCheck
+ballUpdateOOBLeft:
+swc1 $f3, posX 
+sw $t1, 4($t0)
+j ballUpdateOOBUpCheck
+ballUpdateOOBUp:
+swc1 $f3, posY
+sw $t1, 8($t0) 
+j ballUpdateOOBDownCheck
+ballUpdateOOBDown:
+sw $t1, 12($t0)
+swc1 $f3, posY 
+
+
+ballUpdateOOBEnd:
  jr $ra   
 
   
@@ -1085,6 +1169,7 @@ sub $a3, $zero, $a3
 HSliceYOldEnd:
 blt $a3,$a2, HSliceHasIntersection
 move $a3, $a2
+mfc1 $a1, $f2
 HSliceHasIntersection:
 
 jal ClearBgPartial
@@ -1122,6 +1207,7 @@ VSliceXOldEnd:
 
 blt $a2 ,$a3, VSliceHasIntersection
 move $a2, $a3
+mfc1 $a0, $f2
 VSliceHasIntersection:
 jal ClearBgPartial
 
@@ -1150,8 +1236,245 @@ DealWithCol:
 #DealWithCol checks for a ball collision
 # with the paddles or the roof/floor.
 
+addi $sp, $sp, -8
+
+sw $s0, 0($sp)
+sw $ra, 4($sp) 
+
+#If out of bounds vertically, invert Y velocity
+la $t0, OOBFlags
+lw $t1, 8($t0)
+bne $t1, $zero, OOBColInvertY
+lw $t1, 12($t0)
+bne $t1, $zero, OOBColInvertY
+j CheckOOBHor
+OOBColInvertY:
+lwc1 $f1, ballVelY
+sub.s $f2, $f2, $f2
+sub.s $f2, $f2, $f1
+swc1 $f2, ballVelY
+
+CheckOOBHor:
+#If out of bounds horizontally, invert X velocity
+la $t0, OOBFlags
+lw $t1, 0($t0)
+bne $t1, $zero, OOBColInvertX
+lw $t1, 4($t0)
+bne $t1, $zero, OOBColInvertX
+j CheckCollisions
+OOBColInvertX:
+lwc1 $f1, ballVelX
+sub.s $f2, $f2, $f2
+sub.s $f2, $f2, $f1
+swc1 $f2, ballVelX
+
+
+
+CheckCollisions:
+
+li $s0, 1
+CheckCollisionWithPaddle:
+la $t0, posX
+la $t1, posY
+lwc1 $f1, 0($t0)
+cvt.w.s $f1, $f1
+mfc1 $a2, $f1
+
+lwc1 $f1, 0($t1)
+cvt.w.s $f1, $f1
+mfc1 $a3, $f1
+
+#t3 is offset
+move $t3, $s0 
+sll $t3, $t3, 2 
+add $t0, $t0, $t3
+add $t1, $t1, $t3
+
+#read paddle values
+lwc1 $f1, 0($t0)
+cvt.w.s $f1, $f1
+mfc1 $a0, $f1
+lwc1 $f1, 0($t1)
+cvt.w.s $f1, $f1
+mfc1 $a1, $f1
+
+jal BoundingBoxIntersects #Check if it intersects with paddle 
+addi $s0, $s0, 1
+bnez $v0, DealWithPaddleCol
+lw $t6, numPlayers
+blt $s0, $t6, CheckCollisionWithPaddle
+beq $s0, $t6, CheckCollisionWithPaddle
+
+
+CheckCollisionWithPaddleEnd:
+j DealWithPaddleColEnd
+
+DealWithPaddleCol:
+li $v0, 4
+la $a0, colDetected
+syscall
+
+
+#Load BallVelY
+lwc1 $f1, ballVelY
+cvt.w.s $f1, $f1
+mfc1 $t6, $f1
+
+li $t0, 4
+#set flag if on top AND vy > 0
+slt $t1, $v1, $t0
+slt $t2, $zero, $t6 
+and $t2, $t1, $t2
+bnez $t2, DealWithPaddleColOnTop
+bnez $t1, DealWithPaddleColOnTopC
+ 
+
+#set flag if on top AND vy < 0
+lw $t0, paddleH
+subi $t0, $t0, 4
+slt $t1, $t0, $v1
+slt $t2, $t6, $zero 
+and $t2, $t1, $t2
+bnez $t2, DealWithPaddleColOnBottom
+bnez $t1, DealWithPaddleColOnBottomC
+
+lwc1 $f1, ballVelX
+sub.s $f2, $f2, $f2
+sub.s $f2, $f2, $f1
+swc1 $f2, ballVelX
+j DealWithPaddleColEnd
+DealWithPaddleColOnTop:
+lwc1 $f1, ballVelY
+sub.s $f2, $f2, $f2
+sub.s $f2, $f2, $f1
+swc1 $f2, ballVelY
+#Set posy to be top of paddle
+DealWithPaddleColOnTopC:
+la $t1 posY
+move $t3, $s0 
+sll $t3, $t3, 2 
+add $t1, $t1, $t3
+lwc1 $f1, 0($t1) #f1 has top of paddle
+lw $t0, ballSize
+mtc1 $t0, $f2
+cvt.s.w $f2, $f2 #f2 has ballsize
+sub.s $f1, $f1, $f2
+sub.s $f1, $f1, $f2
+
+la $t1 posY
+swc1 $f1, 0($t1)
+j DealWithPaddleColEnd
+
+DealWithPaddleColOnBottom:
+lwc1 $f1, ballVelY
+sub.s $f2, $f2, $f2
+sub.s $f2, $f2, $f1
+swc1 $f2, ballVelY
+#Set posy to be bottom of paddle
+DealWithPaddleColOnBottomC:
+la $t1 posY
+move $t3, $s0 
+sll $t3, $t3, 2 
+add $t1, $t1, $t3
+lwc1 $f1, 0($t1) #f1 has top of paddle
+lw $t0, paddleH
+mtc1 $t0, $f2
+cvt.s.w $f2, $f2 #f2 has paddle height
+add.s $f1, $f1, $f2
+la $t1 posY
+swc1 $f1, 0($t1)
+j DealWithPaddleColEnd
 #TODO: Implement this.
+DealWithPaddleColEnd:
+
+lw $s0, 0($sp) 
+lw $ra, 4($sp)
+addi $sp, $sp, 8
+
  jr $ra   
+ 
+ ##############################################
+ BoundingBoxIntersects:
+ #BoundingBoxIntesects checks if a paddle intersects
+ #with the ball,and returns the y distance of the col center
+ #from the top of the paddle
+ #	@param a0 the x coordinate of paddle
+ #	@param a1 the y coordinate of the paddle
+ #	@param a2 tthe x coordinate of the ball
+ #	@param a3 the y coordinate of the ball
+ #t0 -> low  x coordinate of paddle
+ #t1 -> high  x coordinate of paddle
+ #t2 -> low  y coordinate of paddle
+ #t3 -> high  y coordinate of paddle
+ #s0 -> low  x coordinate of ball
+ #s1 -> high  x coordinate of ball
+ #s2 -> low  y coordinate of ball
+ #s3 -> high  y coordinate of ball
+
+  addi $sp, $sp, -16
+  sw $s0, 0($sp)
+  sw $s1, 4($sp)
+  sw $s2, 8($sp)
+  sw $s3, 12($sp)
+  
+ move $t0, $a0 
+ lw $t1, paddleW
+ add $t1, $t1, $t0
+ 
+ move $t2, $a1
+ lw $t3, paddleH
+ add $t3, $t3, $t2
+ 
+ move $s0, $a2
+ lw $s1, ballSize
+ add $s1, $s1, $s0
+ 
+ move $s2, $a3
+ lw $s3, ballSize
+ add $s3, $s3, $s2
+ 
+ bgt $s0, $t1,BBoxIntersectsFalse
+ blt $s1, $t0,BBoxIntersectsFalse
+ bgt $s2, $t3,BBoxIntersectsFalse
+ blt $s3, $t2,BBoxIntersectsFalse
+ li $v0, 1
+ #We now know that it intersects
+ #The calculation of the intersection y center
+ #depends on whether s2 > t2
+ 
+ blt $s2, $t2, BBoxIntersectsOnUpper
+ BBoxIntersectsOnLower:
+ blt $s3, $t3, BBoxIntersectsFull
+ move $v1, $s2
+ add $v1, $v1, $t3
+ srl $v1, $v1, 1
+ j BBoxIntersectsEnd
+ 
+ BBoxIntersectsFull:
+ move $v1, $s2
+ add $v1, $v1, $s3
+ srl $v1, $v1, 1
+ j BBoxIntersectsEnd
+ 
+ 
+ BBoxIntersectsOnUpper:
+ move $v1, $t2
+ add $v1, $v1, $s3
+ srl $v1, $v1, 1
+ j BBoxIntersectsEnd
+ 
+ 
+ 
+ BBoxIntersectsFalse:
+ li $v0, 0
+ BBoxIntersectsEnd:
+ sub $v1, $v1, $t2
+  lw $s0, 0($sp)#restore
+  lw $s1, 4($sp)
+  lw $s2, 8($sp)
+  lw $s3, 12($sp)
+  addi $sp, $sp, 16
+  jr $ra
  
 ###########################################
 ###########################################
@@ -1204,7 +1527,7 @@ WaitLoop:
 	sw $ra, 0($sp)
 	la $a0, frameEnded
 	li  $v0, 4
-	syscall
+	#syscall
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 		
