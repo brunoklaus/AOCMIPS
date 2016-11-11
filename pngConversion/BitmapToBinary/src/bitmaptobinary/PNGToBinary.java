@@ -96,6 +96,9 @@ public class PNGToBinary {
             
             String binaryString = Integer.toBinaryString(rgbValues[i]);
             
+            while (binaryString.length() < 32)  {
+                binaryString = "0" + binaryString;
+            }
             int startIndex = 0;
             for (int j = 0; j < 4; j++) {
                 //Get cuurent byte representation

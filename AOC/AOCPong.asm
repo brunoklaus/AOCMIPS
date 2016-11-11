@@ -3,7 +3,7 @@
 ######################################################################
 #           Programmed by 					     #
 #	Bruno Klaus de Aquino Afonso             		     #
-######################################################################
+#############s#########################################################
 #	Controls (so far) :						     #
 #	W to move Up menu					     #
 #	S to move Down menu					     #
@@ -64,6 +64,18 @@
 	fLButton2P: .asciiz "lbutton_2P.KLAUS"
 	fLButton4P: .asciiz "lbutton_4P.KLAUS"
 	fCreditsScreen: .asciiz "creditsGrad.KLAUS"
+	fNumber0: .asciiz "0_00000.KLAUS"
+	fNumber1: .asciiz "1_00000.KLAUS"
+	fNumber2: .asciiz "2_00000.KLAUS"
+	fNumber3: .asciiz "3_00000.KLAUS"
+	fNumber4: .asciiz "4_00000.KLAUS"
+	fNumber5: .asciiz "5_00000.KLAUS"
+	fNumber6: .asciiz "6_00000.KLAUS"
+	fNumber7: .asciiz "17_00000.KLAUS"
+	fNumber8: .asciiz "8_00000.KLAUS"
+	fNumber9: .asciiz "9_00000.KLAUS"
+	fNumber10: .asciiz "10_00000.KLAUS"
+	fGameBG: .asciiz "gameBG.KLAUS"
 	
 	# Game Variables
 	paddleW : .word 4
@@ -141,10 +153,22 @@ li $a0, 8
 li $a1, 85
 jal DrawPNGOnDisplay
 
+
+####Test
+la   $a0, fNumber4    
+jal LoadFile
+li $a0, 8
+li $a1, 85
+jal DrawPNGOnDisplay
+
+
+
 addi $s0, $zero, 0
 sw $s0, TitleFMS 
 
-#j InitGame
+
+j InitGame
+
 j TitleLoop
 
 
@@ -405,6 +429,14 @@ DrawPNGOnDisplay:
 	
 	#Move pixel to mapped address
 	lw $s3, ($t2)
+	
+	#Check if transparent
+	move $t4, $s3
+	srl $t4, $t4, 24
+	
+	bne $t4, 255, WhileDrawOnPNGEndStore  
+ 
+	
 	#t4 will get  initDisplayAddr + (numBytesPerLine * y' + x' * 4)  
 	move $t4, $t1
 	mult $t4, $s1
@@ -418,7 +450,7 @@ DrawPNGOnDisplay:
 	add $t4, $t4, $t3
 	#Store
 	sw $s3, ($t4)  
-	  
+	WhileDrawOnPNGEndStore:  
 	  
 	#Increment accordingly
 	addi $t2, $t2, 4 #increment infobuffer ptr
@@ -769,6 +801,8 @@ sub64:
 ###Here we initialize the game variables, and jump straight into
 ### the main loop.
   InitGame:
+  
+  
  #Store initial x positions
   la $t0, posX
   l.s $f1, initPosX_0
@@ -797,7 +831,16 @@ sub64:
   s.s $f1, 12($t0) 
   s.s $f1, 16($t0)
   
-  jal ClearBg
+#Load BG
+  la   $a0, fGameBG 
+  jal LoadFile
+  li $a0, 0
+  li $a1, 0
+  jal DrawPNGOnDisplay
+
+
+  
+  #jal ClearBg
 
  MainLoop:
  

@@ -13,18 +13,21 @@ import java.util.Arrays;
  */
 public class Main {
     
-    static String filename = "credits_grad";
+    static String filename = "gameBG";
     
     public static void main (String[] args) {
+      
         PNGToBinary conv = new PNGToBinary();
         conv.read(filename + ".png");
         Byte[] res = conv.toLittleEndian(conv.convertToBinary());
         conv.save(filename + ".KLAUS", res);
-        
+
         for (int k = 0; k < res.length; k++) {
             Byte b = res[k];
-        System.out.println(res[k]);
-    }
+            System.out.println(res[k]);
+        }
+       
+       
     }
     
 }
