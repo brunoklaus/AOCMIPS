@@ -29,13 +29,20 @@
 	#a .KLAUS file (65536 for 128x128 pixels, 8 for extra info)
 	infoBuffer: .space 65544
 	
+	
+	#A final buffer to load fonts
+	fontBuffer: .space 4096
+	
+	
 	#where the Bitmap display lies
 	bmpAddr: .word 0x10010000 
 	infoAddr: .word 0x10020000
+	fontAddr: .word 0x10030008
 	
 	#These values must be consistent with buffer space
 	bmpSize : .word 65536
 	infoSize : .word 65536
+	fontSize: .word 4096
 	displaySize: .word 512
 	unitSize: .word 4
 	
@@ -64,17 +71,29 @@
 	fLButton2P: .asciiz "lbutton_2P.KLAUS"
 	fLButton4P: .asciiz "lbutton_4P.KLAUS"
 	fCreditsScreen: .asciiz "creditsGrad.KLAUS"
+	.align 2
 	fNumber0: .asciiz "0_00000.KLAUS"
+	.align 2
 	fNumber1: .asciiz "1_00000.KLAUS"
+	.align 2
 	fNumber2: .asciiz "2_00000.KLAUS"
+	.align 2
 	fNumber3: .asciiz "3_00000.KLAUS"
+	.align 2
 	fNumber4: .asciiz "4_00000.KLAUS"
+	.align 2
 	fNumber5: .asciiz "5_00000.KLAUS"
+	.align 2
 	fNumber6: .asciiz "6_00000.KLAUS"
-	fNumber7: .asciiz "17_00000.KLAUS"
+	.align 2
+	fNumber7: .asciiz "7_00000.KLAUS"
+	.align 2
 	fNumber8: .asciiz "8_00000.KLAUS"
+	.align 2
 	fNumber9: .asciiz "9_00000.KLAUS"
+	.align 2
 	fNumber10: .asciiz "10_00000.KLAUS"
+	
 	fGameBG: .asciiz "gameBG.KLAUS"
 	
 	# Game Variables
@@ -89,12 +108,12 @@
 	initPosX_0: .float 0.0
 	initPosX_1: .float 0.0
 	initPosX_2: .float 124.0
-	initPosX_3: .float 28.0
-	initPosX_4: .float 96.0
+	initPosX_3: .float 40.0
+	initPosX_4: .float 84.0
 	
 	initPosY: .float 10.0
-	initBallVelX : .float 100.0
-	initBallVelY : .float 30.0
+	initBallVelX : .float 70.0
+	initBallVelY : .float 70.0
 	
 	
 	#Now we declare the actual buffer of current game values
@@ -108,6 +127,13 @@
 	#The state of all axes
 	inputList: .word 1:4
 	
+	#Place of score info
+	scoreP1PosX: .word 16
+	scoreP2PosX: .word 80
+	scoreP1: .word 0
+	scoreP2: .word 0
+	
+	
 	#64-bit current time
 	cTime_0 : .word 0	
 	cTime_1: .word 0			
@@ -115,8 +141,8 @@
 	colDetected: .asciiz"Collision detected \n"
 	frameDuration : .float 0.03333333
 	
-	roof: .word 20
-	floor: .word 120
+	roof: .word 4
+	floor: .word 124
 	
 	
 	
@@ -130,7 +156,7 @@ Init:
 la   $a0, fTitleScreen      
 jal LoadFile
 li $a0, 0
-li $a0, 0
+li $a1, 0
 jal DrawPNGOnDisplay
 
 #Load Buttons
@@ -434,7 +460,7 @@ DrawPNGOnDisplay:
 	move $t4, $s3
 	srl $t4, $t4, 24
 	
-	bne $t4, 255, WhileDrawOnPNGEndStore  
+	bne $t4, 255, WhileDrawPNGOnEndStore  
  
 	
 	#t4 will get  initDisplayAddr + (numBytesPerLine * y' + x' * 4)  
@@ -450,7 +476,7 @@ DrawPNGOnDisplay:
 	add $t4, $t4, $t3
 	#Store
 	sw $s3, ($t4)  
-	WhileDrawOnPNGEndStore:  
+	WhileDrawPNGOnEndStore:  
 	  
 	#Increment accordingly
 	addi $t2, $t2, 4 #increment infobuffer ptr
@@ -571,17 +597,96 @@ DrawPaddleOnDisplay:
 	
 	jr $ra
 
-##############################################
-##############################################
-###########################################
-ClearBgPartial:
-#Exactly like drawPaddleOnDisplay, but it uses bgColor instead
-#	@param a0 the x position (left)
-#	@param a1 the y position  (top)
-#	@param a2 the width
-#	@param a3 the height
+####################################################################################
+#LoadFontNumber - Loads the font of given Number into the info buffer
+LoadFontNumber:
+#	@param a0 the number of the font
+#	@param a1 the x pos
+#	@param a2 the y pos
+	#make backup
+	
+	addi $sp, $sp, -24
+	sw $ra, 0($sp) 
+	sw $s0, 4($sp)
+	sw $s1, 8($sp)
+	sw $s2, 12($sp)
+	sw $s3, 16($sp)
+	sw $s4, 20($sp)
+	
+	lw $s0, bmpAddr
+	lw $s1, infoAddr
+	lw $s2, bmpSize
+	lw $s3, infoSize
+	lw $s4, displaySize
+	#We cheat by 
+	#a) change infoAddr to fontAddr so that it goes to
+	#the proper location when we call LoadFile
+	#b)change bmpAddr to the old (infoAddr + 8) and call DrawPNGOnDisplay
+	#c) restore
+	
+	#do a)
+	lw $t0, fontAddr
+	lw $t1, fontSize
+	sw $t0, infoAddr
+	sw $t1, infoSize
+	li $t0, 32
+	sw $t0, displaySize
+	
+	move $t0, $a0
+	sll $t0, $t0, 4
+	la $a0, fNumber0
+	add $a0, $a0, $t0
+	#backup
+	
+	addi $sp, $sp, -12
+	sw $a1, 0($sp) 
+	sw $a2, 4($sp)
+	jal LoadFile
+	lw $a1, 0($sp) 
+	lw $a2, 4($sp)
+	addi $sp, $sp, 12
+	
+	#do b)
+	move $t0, $s1 #t0 is old infoAddr
+	add $t0, $t0, 8
+	sw $t0, bmpAddr
+	move $t0, $s1 #t0 is old infoSize
+	sw $t0, bmpSize
+	
+	move $a0, $a1
+	move $a1, $a2
+	
+	sw $s4, displaySize
+	jal DrawPNGOnDisplay
+	
+	#do c)
+	sw $s0, bmpAddr
+	sw $s1, infoAddr
+	sw $s2, bmpSize
+	sw $s3, infoSize
+	sw $s4, displaySize
 
-	addi $sp, $sp, -24	
+	lw $ra, 0($sp) 
+	lw $s0, 4($sp)
+	lw $s1, 8($sp)
+	lw $s2, 12($sp)
+	lw $s3, 16($sp)
+	lw $s4, 20($sp)
+	addi $sp, $sp, 24
+	jr $ra	
+
+##################################################################################
+#ClearBgPartial - Cleans Display by using the background. Guess what, it is another
+#DrawPNGOnDisplay copypasta, but it applies the coordinates transformation
+#for the target in DrawPNGOnDisplay for the source as well
+ClearBgPartial:	
+	#Moves the latest thing on info buffer to the display.
+#	@param a0 the x position
+#	@param a1 the y position
+#	@param a2 the x size
+#	@param a3 the y size
+	
+	addi $sp, $sp, -24
 	sw $ra, 0($sp) #stuff
 	sw $s0, 4($sp)
 	sw $s1, 8($sp)
@@ -594,8 +699,11 @@ ClearBgPartial:
 	#t2 - gets display address will not change
 	#t5 - get nullColor
 	
-	lw $t3, bmpAddr # = y' * numBytesPerLine + z'
-		
+	lw $t2, infoAddr #to be incremented
+	lw $t3, bmpAddr # = y' * numBytesPerLine + x'
+	addi $t2, $t2, 8 
+	lw $t5, bgColor  		
+	
 	#t1 will be number of bytes in a line
 	lw $t1, displaySize
 	
@@ -610,17 +718,22 @@ ClearBgPartial:
 	add $t7, $t7, $s1 #t7 now holds y+height
 	
 	
-	WhileClearBgPartialY:
+	
+	
+	
+	ClearBgDisplayY:
 
 	slt $s3, $s1, $t7
-	beq $s3, $zero, WhileClearBgPartialYEnd	
+	beq $s3, $zero, ClearBgDisplayYEnd	
 	move $s0, $a0 # x' is reset to x
 	
-	WhileClearBgPartialX:
+	ClearBgDisplayX:
 	slt $s3, $s0, $t6
-	beq $s3, $zero, WhileClearBgPartialXEnd
+	beq $s3, $zero, ClearBgDisplayXEnd
 	
-	lw $s3, bgColor
+	
+	
+	
 	#t4 will get  initDisplayAddr + (numBytesPerLine * y' + x' * 4)  
 	move $t4, $t1
 	mult $t4, $s1
@@ -630,22 +743,34 @@ ClearBgPartial:
 	add $t4, $t4, $s0
 	add $t4, $t4, $s0
 	add $t4, $t4, $s0
-	
+	move $t5, $t4 #(numBytesPerLine * y' + x' * 4)  
 	add $t4, $t4, $t3
+	
+	
+ 	#Get equivalent address in display
+	add $t2, $t2, $t5
+	lw $s3, 0($t2) #get pixel
+	#Restore t2
+	sub $t2, $t2, $t5
+ 
+ 
+	
+
 	#Store
 	sw $s3, ($t4)  
-	  
+	
+	
+	ClearBgEndStore:  
 	  
 	#Increment accordingly
-	addi $t2, $t2, 4 #increment infobuffer ptr
 	add $s0, $s0, 1	#increment x'
-	j WhileClearBgPartialX
+	j ClearBgDisplayX
 	
-	WhileClearBgPartialXEnd:
+	ClearBgDisplayXEnd:
 	add $s1, $s1, 1	#increment y'
-	j WhileClearBgPartialY
+	j ClearBgDisplayY
 			
-	WhileClearBgPartialYEnd:
+	ClearBgDisplayYEnd:
 
 
 	lw $ra, 0($sp)
@@ -659,57 +784,15 @@ ClearBgPartial:
 	
 	jr $ra
 
-##############################################
-
-
-
-##################################################################################
-#ClearBg - Cleans backgorund with a background color
-ClearBg:
-
-	#t0 - Will be our index var when going through the bitmap
-	#t1 - holds hold (displaySize^2)/(UnitSize^2)(number of words in bmp)
-	#t3 - gets bmp address initially, will be pointer to current address
-	lw $t3, bmpAddr
-	#t4 gets unit length
-	lw $t4, unitSize
-	#t6 get bgColor
-	lw $t6, bgColor
-  		
-	lw $t1, displaySize
-	
-	ori $t0, $zero, 0 
-	mult $t1, $t1
-	mflo $t1
-	
-	div $t1, $t4 
-	mflo $t1
-	div $t1, $t4 
-	mflo $t1
-	
-	
-	
-	clearLoop:
-	#t2 - Holds 1 if index variable greater than number of words
-	slt $t2, $t1, $t0 
-	beq $t2, 1, clearLoopEnd  
-	
-	#Store bgColor in current address, increment address
-	sw $t6, ($t3) 
-	
-	addi $t3, $t3, 4 #increment address in bitmap
-	addi $t0, $t0, 1  #increment counter
-	
-	 
-	j clearLoop
-	
-	clearLoopEnd:	
-	jr $ra		
+		
 #########################################################################################
 #LoadFile reads .KLAUS files and puts its bytes into a buffer
 #	@param a0  the ascii.z name
-LoadFile : 
+LoadFile: 
 
+	addi $sp, $sp, -8
+	sw $ra, 0($sp) #stuff
+	sw $s6, 4($sp)
 
 
 
@@ -732,9 +815,10 @@ LoadFile :
 	syscall            # close file
 	
 	
-
-	addi $a0, $zero, 0
-	addi $a1, $zero, 0
+	lw $ra, 0($sp) #stuff
+	lw $s6, 4($sp)
+	addi $sp, $sp, 8
+			
 	
 	jr $ra
 #################################################################
@@ -830,7 +914,10 @@ sub64:
   s.s $f1, 8($t0)
   s.s $f1, 12($t0) 
   s.s $f1, 16($t0)
+
   
+  
+      
 #Load BG
   la   $a0, fGameBG 
   jal LoadFile
@@ -838,7 +925,27 @@ sub64:
   li $a1, 0
   jal DrawPNGOnDisplay
 
+#Load Initial scores
+  li $a0, 0
+  sw $a0, scoreP1
+  lw $a1, scoreP1PosX
+  li $a2, 0
+  jal LoadFontNumber
+#Load Initial scores
 
+  li $a0, 0
+  sw $a0, scoreP2
+  lw $a1, scoreP2PosX
+  li $a2, 0
+  jal LoadFontNumber
+    
+  #Update bg
+li $a0, 0
+li $a1, 0
+li $a2, 128
+li $a3, 128
+jal ClearBgPartial
+  
   
   #jal ClearBg
 
@@ -863,11 +970,16 @@ sub64:
  	j OutOfBoundsEnd
  	OutOfBoundsRight:
  	addi $a0, $zero, 0
+ 	jal UpdateScore
+ 	j MainLoop
  	OutOfBoundsLeft:
  	addi $a0, $zero, 1
+ 	jal UpdateScore
+ 	j MainLoop
  	OutOfBoundsEnd:
  	
  	jal DealWithCol
+ 	DealWithColEnd:
  	
  	jal DrawFrame
  	
@@ -877,9 +989,108 @@ sub64:
  	jal WaitLoop
   
 j MainLoop   
+#####################
+Max:
+#	@param a0 a value
+#	@param a1 another value
+#	@return v0 the max
+move $v0, $a0
+bgt $a0,$a1, MaxEnd
+move $v0, $a1
+MaxEnd:
+jr $ra
+
+#####################
+Min:
+#	@param a0 a value
+#	@param a1 another value
+#	@return v0 the max
+move $v0, $a0
+blt $a0,$a1, MinEnd
+move $v0, $a1
+MinEnd:
+jr $ra
+
+
+
+##########################################
+UpdateScore: 
+#UpdateScore updates the value of the score of
+# either side and redraws the screen
+#	@param a0 0 iff P1 scored, 1 iff P2 scored  
+
+addi $sp, $sp, -16
+sw $ra, 0($sp)
+sw $s0, 4($sp)
+sw $s1, 8($sp)
+
+sll $a0, $a0, 2
+la $t0, scoreP1PosX
+la $t1, scoreP1
+add $s0, $t0, $a0 #s0 is scorePosX addr
+add $s1, $t1, $a0 #s0 is score addr
+
+#increment score
+lw $t0, 0($s1)
+addi $a0, $t0, 1
+li $a1, 10
+jal Min
+sw $v0, 0($s1)
+
+
+
+#Update screen on score
+#First, draw background
+la $a0, fGameBG
+jal LoadFile
+
+
+#Load P1 Font
+lw $a0, scoreP1
+lw $a1, scoreP1PosX
+li $a2, 0 
+jal LoadFontNumber
+#Load P2 Font
+
+lw $a0, scoreP2
+lw $a1, scoreP2PosX
+li $a2, 0 
+jal LoadFontNumber
+
+#Redraw bg
+
+lw $ra, 0($sp)
+lw $a0, 0($s0)
+li $a1, 0
+li $a2, 128
+li $a3, 128
+jal ClearBgPartial
+
+#Reset ball and paddle stuff
 
  
-  
+  #Set ball velocity
+  l.s $f1, initBallVelX
+  s.s $f1, ballVelX
+  l.s $f1, initBallVelY
+  s.s $f1, ballVelY
+
+#ALL Y positions shall be 64  
+  la $t0, posY
+  l.s $f1, initPosY 
+  s.s $f1, 0($t0)
+  s.s $f1, 4($t0)
+  s.s $f1, 8($t0)
+  s.s $f1, 12($t0) 
+  s.s $f1, 16($t0)
+
+
+
+lw $ra, 0($sp)
+lw $s0, 4($sp)
+lw $s1, 8($sp)
+addi $sp, $sp, 16
+jr $ra
 ###########################################
 ###########################################
 CheckAxisValues:
@@ -1519,13 +1730,6 @@ addi $sp, $sp, 8
   addi $sp, $sp, 16
   jr $ra
  
-###########################################
-###########################################
-UpdateScore:
-#UpdateScore updates the score
-#TODO: Implement this.
- jr $ra   
-  
     
 #############################
 #WaitLoop waits for frame to end
