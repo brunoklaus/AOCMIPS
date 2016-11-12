@@ -93,25 +93,25 @@
 	fNumber9: .asciiz "9_00000.KLAUS"
 	.align 2
 	fNumber10: .asciiz "10_00000.KLAUS"
-	
+	.align 2
 	fGameBG: .asciiz "gameBG.KLAUS"
-	
+	.align 2
 	# Game Variables
 	paddleW : .word 4
 	paddleH : .word 30
 	ballSize: .word 2
 	numPlayers :.word 4
-	OOBFlags : .word 4 #1 if ball out of bounds for (left, right, up, down), 0 otherwise
+	OOBFlags : .space 16 #1 if ball out of bounds for (left, right, up, down), 0 otherwise
 	
 	#*_0 is for the ball, 1-4 for the players
 	#X positions. Position X 1-4 stays constant
-	initPosX_0: .float 0.0
+	initPosX_0: .float 64.0
 	initPosX_1: .float 0.0
 	initPosX_2: .float 124.0
 	initPosX_3: .float 40.0
 	initPosX_4: .float 84.0
 	
-	initPosY: .float 10.0
+	initPosY: .float 50.0
 	initBallVelX : .float 70.0
 	initBallVelY : .float 70.0
 	
@@ -125,7 +125,8 @@
 	oldPosX: .float 0.0
 	paddleVelY: .float 100.0 #velocity at which paddle moves
 	#The state of all axes
-	inputList: .word 1:4
+	inputList: .word -1:4
+	inputAddr: .word 0xFFFF0010
 	
 	#Place of score info
 	scoreP1PosX: .word 16
@@ -906,15 +907,17 @@ sub64:
   l.s $f1, initBallVelY
   s.s $f1, ballVelY
 
-#ALL Y positions shall be 64  
+
+#ALL Y positions of paddles are the same  
   la $t0, posY
   l.s $f1, initPosY 
-  s.s $f1, 0($t0)
   s.s $f1, 4($t0)
   s.s $f1, 8($t0)
   s.s $f1, 12($t0) 
   s.s $f1, 16($t0)
-
+# The Y ball pos is 0
+sub.s $f1, $f1, $f1
+s.s $f1, 0($t0)
   
   
       
@@ -943,7 +946,7 @@ sub64:
 li $a0, 0
 li $a1, 0
 li $a2, 128
-li $a3, 128
+li $a3, 64
 jal ClearBgPartial
   
   
@@ -1068,6 +1071,14 @@ jal ClearBgPartial
 
 #Reset ball and paddle stuff
 
+ #Store initial x positions
+  la $t0, posX
+  l.s $f1, initPosX_0
+  s.s $f1, 0($t0)
+ 
+  la $t0, oldPosX
+  l.s $f1, initPosX_0
+  s.s $f1, 0($t0)
  
   #Set ball velocity
   l.s $f1, initBallVelX
@@ -1075,15 +1086,16 @@ jal ClearBgPartial
   l.s $f1, initBallVelY
   s.s $f1, ballVelY
 
-#ALL Y positions shall be 64  
+#ALL Y positions of paddles are the same  
   la $t0, posY
   l.s $f1, initPosY 
-  s.s $f1, 0($t0)
   s.s $f1, 4($t0)
   s.s $f1, 8($t0)
   s.s $f1, 12($t0) 
   s.s $f1, 16($t0)
-
+# The Y ball pos is 0
+sub.s $f1, $f1, $f1
+s.s $f1, 0($t0)
 
 
 lw $ra, 0($sp)
@@ -1097,6 +1109,30 @@ CheckAxisValues:
 #CheckAxesValues puts the values of each axis
 # and puts them into inputList. 
 #TODO: Implement this. 
+ #t0 gets memory mapped IO addr
+ #t1 gets inputlist addt
+ #t2 gets counter var
+ 
+ lw $t0, inputAddr
+ la $t1, inputList
+ li $t2, 0
+ 
+ CheckAxisValuesForLoop:
+ 
+ lw $t3, 0($t0) #t3 gets axis value
+ 
+ bne $t3, 2, CheckAxisValuesNotNeg
+ li $t3, -1
+ CheckAxisValuesNotNeg:
+ sub $t3, $zero, $t3
+ sw $t3, 0($t1) #store in input list
+ addi $t2, $t2, 1 #increment counter
+ addi $t0, $t0, 4 #increment
+ addi $t1, $t1, 4 #increment
+ 
+ blt $t2, 4, CheckAxisValuesForLoop
+ CheckAxisValuesForLoopEnd:
+ 
  jr $ra 
 
   
