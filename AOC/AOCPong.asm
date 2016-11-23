@@ -181,18 +181,10 @@ li $a1, 85
 jal DrawPNGOnDisplay
 
 
-####Test
-la   $a0, fNumber4    
-jal LoadFile
-li $a0, 8
-li $a1, 85
-jal DrawPNGOnDisplay
-
 
 
 addi $s0, $zero, 0
 sw $s0, TitleFMS 
-
 
 j InitGame
 
@@ -1519,6 +1511,52 @@ lw $ra, 0($sp)
 addi $sp, $sp, 4
  jr $ra 
     
+##############################################
+BisectionMethod:
+#Calculates the sqrt of c, given that sqrt(c) is in [0, 1]
+#	@param a0 c
+#	@return v0 sqrt(c)
+li $t0, 0
+li $t1, 1
+mtc1 $t0, $f0 #f0 -> ak
+cvt.s.w $f0,$f0
+mtc1 $t1, $f1 #f1 -> bk
+cvt.s.w $f1, $f1 
+mtc1 $a0, $f2 
+li $t1, 2
+mtc1 $t1, $f3  #f3 = 2
+cvt.s.w $f3, $f3
+
+#f4 will be xk
+
+#t0 acts as iteration counter
+BisectionLoop:
+#get xk
+add.s $f4, $f0, $f1
+div.s $f4, $f4, $f3
+
+#f5 will be x*x - C
+mul.s $f5, $f4, $f4
+sub.s $f5, $f5, $f2
+sub.s $f6, $f6, $f6
+c.le.s $f5, $f6
+bc1t BisectionLoopFXKNeg
+
+mov.s $f1, $f4
+j BisectionLoopFXKEnd
+BisectionLoopFXKNeg:
+mov.s $f0, $f4
+BisectionLoopFXKEnd:
+
+addi $t0, $t0, 1
+#Check conditions
+bgt $t0, 10, BisectionEnd
+ 
+
+j BisectionLoop
+BisectionEnd:
+mfc1 $v0, $f4
+jr $ra
         
 ###########################################
 ###########################################
@@ -1610,7 +1648,7 @@ lwc1 $f1, ballVelY
 cvt.w.s $f1, $f1
 mfc1 $t6, $f1
 
-li $t0, 4
+li $t0, 2
 #set flag if on top AND vy > 0
 slt $t1, $v1, $t0
 slt $t2, $zero, $t6 
@@ -1621,17 +1659,80 @@ bnez $t1, DealWithPaddleColOnTopC
 
 #set flag if on top AND vy < 0
 lw $t0, paddleH
-subi $t0, $t0, 4
+subi $t0, $t0,2
 slt $t1, $t0, $v1
 slt $t2, $t6, $zero 
 and $t2, $t1, $t2
 bnez $t2, DealWithPaddleColOnBottom
 bnez $t1, DealWithPaddleColOnBottomC
 
+
+##Usual case:
+#Invert X vel
 lwc1 $f1, ballVelX
 sub.s $f2, $f2, $f2
 sub.s $f2, $f2, $f1
 swc1 $f2, ballVelX
+#Calculate y vel
+lw $t1, paddleH
+add $t3, $v1, $v1
+sub $t3, $t3, $t1
+#f4 holds C
+#f5 holds new y vel
+#f6 holds (float)paddleH
+#f7 holds 1 if C = (2x-h)/h > 0, -1 otherwise
+#f8 gets |vx|
+#f9 is 1-c*c
+#calculate $f8
+mov.s $f8, $f2
+sub.s $f7, $f7, $f7
+c.lt.s $f8, $f7
+bc1f VxIsPositive
+sub.s $f8, $f7, $f8  
+VxIsPositive:
+
+#calculate $f6 = paddleH
+mtc1 $t1, $f6
+cvt.s.w $f6, $f6
+
+#Calculate $f4 = C
+mtc1 $t3, $f4
+cvt.s.w $f4, $f4
+div.s $f4, $f4, $f6
+
+li $t1, 1
+bltz $t3, DealWithPaddleColCNeg
+DealWithPaddleColCNeg: 
+li $t1, -1
+DealWithPaddleColCNegEnd:
+mtc1 $t1, $f6 
+cvt.s.w $f6, $f6 #f6 is multiplier
+mul.s $f4, $f4, $f6 #f4 is now positive
+
+mul.s $f5, $f4, $f8
+mul.s $f5, $f5, $f6
+#f8 will be 1-C*C
+li $t1, 1
+mtc1 $t1, $f8 
+cvt.s.w $f8, $f8 
+mul.s $f4, $f4, $f4 #f4 is now C*C
+sub.s $f8, $f8, $f4
+
+addi $sp, $sp, -8
+sw $ra, 0($sp)
+swc1 $f5, 4($sp)
+mfc1 $a0,$f8
+jal BisectionMethod
+lw $ra, 0($sp)
+lwc1 $f5, 4($sp)
+addi $sp, $sp, 8 
+mtc1 $v0, $f8
+div.s $f5, $f5, $f8
+swc1 $f5, ballVelY
+
+
+
+
 j DealWithPaddleColEnd
 DealWithPaddleColOnTop:
 lwc1 $f1, ballVelY
@@ -1642,12 +1743,13 @@ swc1 $f2, ballVelY
 DealWithPaddleColOnTopC:
 la $t1 posY
 move $t3, $s0 
+addi $t3, $t3, -1
 sll $t3, $t3, 2 
 add $t1, $t1, $t3
 lwc1 $f1, 0($t1) #f1 has top of paddle
 lw $t0, ballSize
 mtc1 $t0, $f2
-cvt.s.w $f2, $f2 #f2 has ballsize
+cvt.s.w $f2, $f2 #f2 has (float)ballsize
 sub.s $f1, $f1, $f2
 sub.s $f1, $f1, $f2
 
@@ -1662,15 +1764,18 @@ sub.s $f2, $f2, $f1
 swc1 $f2, ballVelY
 #Set posy to be bottom of paddle
 DealWithPaddleColOnBottomC:
-la $t1 posY
+la $t1, posY
 move $t3, $s0 
+addi $t3, $t3, -1
 sll $t3, $t3, 2 
 add $t1, $t1, $t3
 lwc1 $f1, 0($t1) #f1 has top of paddle
 lw $t0, paddleH
 mtc1 $t0, $f2
 cvt.s.w $f2, $f2 #f2 has paddle height
+
 add.s $f1, $f1, $f2
+
 la $t1 posY
 swc1 $f1, 0($t1)
 j DealWithPaddleColEnd
