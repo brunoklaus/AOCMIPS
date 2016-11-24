@@ -94,8 +94,16 @@
 	.align 2
 	fNumber10: .asciiz "10_00000.KLAUS"
 	.align 2
-	fGameBG: .asciiz "gameBG.KLAUS"
+	fDeuce: .asciiz "11_00000.KLAUS"
 	.align 2
+	fAdv: .asciiz "12_00000.KLAUS"
+	.align 2
+	
+	fMinus: .asciiz "13_00000.KLAUS"
+	.align 2
+	fGameBG: .asciiz "gameBG.KLAUS"
+	
+	
 	# Game Variables
 	paddleW : .word 4
 	paddleH : .word 30
@@ -186,8 +194,8 @@ jal DrawPNGOnDisplay
 addi $s0, $zero, 0
 sw $s0, TitleFMS 
 
-j InitGame
 
+j InitGame
 j TitleLoop
 
 
@@ -453,7 +461,7 @@ DrawPNGOnDisplay:
 	move $t4, $s3
 	srl $t4, $t4, 24
 	
-	bne $t4, 255, WhileDrawPNGOnEndStore  
+	blt $t4, 120, WhileDrawPNGOnEndStore  
  
 	
 	#t4 will get  initDisplayAddr + (numBytesPerLine * y' + x' * 4)  
@@ -1014,31 +1022,93 @@ UpdateScore:
 # either side and redraws the screen
 #	@param a0 0 iff P1 scored, 1 iff P2 scored  
 
-addi $sp, $sp, -16
+addi $sp, $sp, -28
 sw $ra, 0($sp)
 sw $s0, 4($sp)
 sw $s1, 8($sp)
+sw $s2, 12($sp)
+sw $s3, 16($sp)
+sw $s4, 20($sp)
+sw $s5, 24($sp)
 
+xori $t2, $a0, 1
 sll $a0, $a0, 2
+sll $t2, $t2, 2
+move $s4, $a0
+move $s5, $t2
+
 la $t0, scoreP1PosX
 la $t1, scoreP1
-add $s0, $t0, $a0 #s0 is scorePosX addr
-add $s1, $t1, $a0 #s0 is score addr
 
-#increment score
-lw $t0, 0($s1)
-addi $a0, $t0, 1
-li $a1, 10
-jal Min
-sw $v0, 0($s1)
+add $s0, $t0, $s4 #s0 is the address of who scored
+add $s1, $t1, $s4 #s1 is addr of old score of who scored
 
-
+add $s2, $t0, $s5 #s2 is the address of who did not score
+add $s3, $t1, $s5 #s3 is addr of score of who did not score
 
 #Update screen on score
 #First, draw background
 la $a0, fGameBG
 jal LoadFile
 
+
+#increment score
+lw $t0, 0($s1)
+addi $a0, $t0, 1
+sw $a0, 0($s1)
+
+li $t2, 11
+lw $t4, 0($s1)#t4 is A
+lw $t5, 0($s3)#t5 is B
+blt $t4, $t2, NormalSetScore #if who scored has <10 pts, update normally
+#If A-B > 1, then game over; If A-B == 1, then A gets adv; If A-B == 0, Deuce
+sub $t2, $t4, $t5
+addi $t2, $t2, -1
+bgtz $t2, GameOverSetScore
+beqz $t2, AdvSetScore
+
+DeuceSetScore:
+#Load PA Font
+li $a0, 11
+la $a1, scoreP1PosX
+add $a1, $a1, $s4
+lw $a1, 0($a1)
+li $a2, 0 
+jal LoadFontNumber
+#Load PB Font
+li $a0, 11
+la $a1, scoreP1PosX
+add $a1, $a1, $s5
+lw $a1, 0($a1)
+li $a2, 0 
+jal LoadFontNumber
+
+
+
+j SetScoreEnd
+GameOverSetScore:
+j Init
+
+AdvSetScore:
+#Load PA Font
+li $a0, 12
+la $a1, scoreP1PosX
+add $a1, $a1, $s4
+lw $a1, 0($a1)
+li $a2, 0 
+jal LoadFontNumber
+#Load PB Font
+li $a0, 13
+la $a1, scoreP1PosX
+add $a1, $a1, $s5
+lw $a1, 0($a1)
+li $a2, 0 
+jal LoadFontNumber
+
+j SetScoreEnd
+
+
+NormalSetScore:
 
 #Load P1 Font
 lw $a0, scoreP1
@@ -1051,6 +1121,10 @@ lw $a0, scoreP2
 lw $a1, scoreP2PosX
 li $a2, 0 
 jal LoadFontNumber
+
+
+SetScoreEnd:
+
 
 #Redraw bg
 
@@ -1089,11 +1163,14 @@ jal ClearBgPartial
 sub.s $f1, $f1, $f1
 s.s $f1, 0($t0)
 
-
 lw $ra, 0($sp)
 lw $s0, 4($sp)
 lw $s1, 8($sp)
-addi $sp, $sp, 16
+lw $s2, 12($sp)
+lw $s3, 16($sp)
+lw $s4, 20($sp)
+lw $s5, 24($sp)
+addi $sp, $sp, 28
 jr $ra
 ###########################################
 ###########################################
