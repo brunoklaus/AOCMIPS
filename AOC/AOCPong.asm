@@ -108,7 +108,7 @@
 	paddleW : .word 4
 	paddleH : .word 30
 	ballSize: .word 2
-	numPlayers :.word 4
+	numPlayers :.word 2
 	OOBFlags : .space 16 #1 if ball out of bounds for (left, right, up, down), 0 otherwise
 	
 	#*_0 is for the ball, 1-4 for the players
@@ -118,6 +118,10 @@
 	initPosX_2: .float 124.0
 	initPosX_3: .float 40.0
 	initPosX_4: .float 84.0
+	initBallVelX2Players : .float 100.0
+	initBallVelY2Players : .float 100.0
+	initBallVelX4Players : .float 70.0
+	initBallVelY4Players : .float 70.0
 	
 	initPosY: .float 50.0
 	initBallVelX : .float 70.0
@@ -195,7 +199,6 @@ addi $s0, $zero, 0
 sw $s0, TitleFMS 
 
 
-j InitGame
 j TitleLoop
 
 
@@ -299,8 +302,21 @@ TE4_COND:	addi $t4, $t4, 1
 		bne $t0, $t4, TitleProcessInputEnd 
 		j TE4_BODY
 TE1_BODY: 
+li $t4, 2
+sw $t4, numPlayers
+lwc1 $f1, initBallVelX2Players
+swc1 $f1, initBallVelX
+lwc1 $f1, initBallVelY2Players
+swc1 $f1, initBallVelY
+
 j InitGame
 TE2_BODY:
+li $t4, 4
+sw $t4, numPlayers
+lwc1 $f1, initBallVelX4Players
+swc1 $f1, initBallVelX
+lwc1 $f1, initBallVelY4Players
+swc1 $f1, initBallVelY
 j InitGame
 TE3_BODY:
 
@@ -1745,10 +1761,12 @@ bnez $t1, DealWithPaddleColOnBottomC
 
 
 ##Usual case:
-#Invert X vel
+#Invert X vel 
 lwc1 $f1, ballVelX
 sub.s $f2, $f2, $f2
 sub.s $f2, $f2, $f1
+	
+
 swc1 $f2, ballVelX
 #Calculate y vel
 lw $t1, paddleH
