@@ -4,10 +4,23 @@
 #        							     #
 #	Bruno Klaus de Aquino Afonso             		     #
 #############s#########################################################
-#	Controls (so far) :						     #
+#	Controls :
+						     #
 #	W to move Up menu					     #
 #	S to move Down menu					     #
 #	Z to select credits / go back to main menu		     #	
+#	1st Player:
+#		W to move Up paddle				     #
+#		S to move Down paddle				     #
+#	2nd Player:
+#		O to move Up paddle				     #
+#		L to move Down paddle				     #
+#	3rd Player:
+#		R to move Up paddle				     #
+#		F to move Down paddle				     #
+#	4th Player:
+#		U to move Up paddle				     #
+#		J to move Down paddle				     #
 ######################################################################
 #	This program requires the Keyboard and Display MMIO          #
 #       and the Bitmap Display to be connected to MIPS.              #
@@ -118,14 +131,14 @@
 	initPosX_2: .float 124.0
 	initPosX_3: .float 40.0
 	initPosX_4: .float 84.0
-	initBallVelX2Players : .float 80.0
-	initBallVelY2Players : .float 80.0
+	initBallVelX2Players : .float 70.0
+	initBallVelY2Players : .float 70.0
 	initBallVelX4Players : .float 100.0
 	initBallVelY4Players : .float 100.0
 	
 	initPosY: .float 50.0
-	initBallVelX : .float 20.0
-	initBallVelY : .float 20.0
+	initBallVelX : .float 0.0
+	initBallVelY : .float 0.0
 	
 	
 	#Now we declare the actual buffer of current game values
@@ -152,7 +165,7 @@
 	cTime_1: .word 0			
 	frameEnded: .asciiz "Frame Ended\n"
 	colDetected: .asciiz"Collision detected \n"
-	frameDuration : .float 0.0166666
+	frameDuration : .float 0.01666666
 	
 	roof: .word 4
 	floor: .word 124
@@ -1999,7 +2012,14 @@ WaitLoop:
 	
 	
 	bne  $zero, $v1, WaitFrameEnd
-	li $t0, 33
+	li $t0, 1000
+	mtc1 $t0, $f2
+	cvt.s.w $f2, $f2
+	lwc1 $f0, frameDuration
+	mul.s $f1, $f1, $f2
+	cvt.w.s $f1, $f1
+	mfc1 $t0, $f1
+	
 	bgt  $v0, $t0, WaitFrameEnd
 	j WaitFrame
 	# If we got here, then frame has ended
