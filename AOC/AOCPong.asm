@@ -1,7 +1,7 @@
 ######################################################################
-# 			     PONG - INTRO                            #
+# 			     PONG                          #
 ######################################################################
-#           Programmed by 					     #
+#        							     #
 #	Bruno Klaus de Aquino Afonso             		     #
 #############s#########################################################
 #	Controls (so far) :						     #
@@ -118,14 +118,14 @@
 	initPosX_2: .float 124.0
 	initPosX_3: .float 40.0
 	initPosX_4: .float 84.0
-	initBallVelX2Players : .float 100.0
-	initBallVelY2Players : .float 100.0
-	initBallVelX4Players : .float 70.0
-	initBallVelY4Players : .float 70.0
+	initBallVelX2Players : .float 80.0
+	initBallVelY2Players : .float 80.0
+	initBallVelX4Players : .float 100.0
+	initBallVelY4Players : .float 100.0
 	
 	initPosY: .float 50.0
-	initBallVelX : .float 70.0
-	initBallVelY : .float 70.0
+	initBallVelX : .float 20.0
+	initBallVelY : .float 20.0
 	
 	
 	#Now we declare the actual buffer of current game values
@@ -152,7 +152,7 @@
 	cTime_1: .word 0			
 	frameEnded: .asciiz "Frame Ended\n"
 	colDetected: .asciiz"Collision detected \n"
-	frameDuration : .float 0.03333333
+	frameDuration : .float 0.0166666
 	
 	roof: .word 4
 	floor: .word 124
